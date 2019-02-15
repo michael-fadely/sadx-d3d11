@@ -866,50 +866,60 @@ HRESULT STDMETHODCALLTYPE Direct3DDevice8::Reset(D3DPRESENT_PARAMETERS8* pPresen
 	return D3D_OK;
 }
 
+void Direct3DDevice8::oit_composite()
+{
+	if (!oit_actually_enabled)
+	{
+		return;
+	}
+
+	auto blend_ = blend_flags.data();
+	blend_flags = BLEND_DEFAULT;
+	update_blend();
+
+	// Unbinds UAV read/write buffers and binds their read-only
+	// shader resource views.
+	oit_read();
+	// Switches to the composite to begin the sorting process.
+	context->PSSetShader(composite_ps.shader.Get(), nullptr, 0);
+	context->VSSetShader(composite_vs.shader.Get(), nullptr, 0);
+
+	// Unbind the last vertex & index buffers (one of the cubes)...
+	context->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+	context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	// ...then draw 3 points. The composite shader uses SV_VertexID
+	// to generate a full screen triangle, so we don't need a buffer!
+	context->Draw(3, 0);
+
+	blend_flags = blend_;
+	update_blend();
+}
+
+void Direct3DDevice8::oit_start()
+{
+	if (!oit_enabled && oit_actually_enabled != oit_enabled)
+	{
+		oit_actually_enabled = oit_enabled;
+		oit_write();
+	}
+
+	oit_actually_enabled = oit_enabled;
+
+	if (oit_actually_enabled)
+	{
+		// Restore R/W access to the UAV buffers from the shader.
+		oit_write();
+	}
+}
+
 HRESULT STDMETHODCALLTYPE Direct3DDevice8::Present(const RECT* pSourceRect, const RECT* pDestRect, HWND hDestWindowOverride, const RGNDATA* pDirtyRegion)
 {
 	print_info_queue();
 	UNREFERENCED_PARAMETER(pDirtyRegion);
 
-	if (oit_enabled_)
-	{
-		auto blend_ = blend_flags.data();
-		blend_flags = BLEND_DEFAULT;
-		update_blend();
-
-		// Unbinds UAV read/write buffers and binds their read-only
-		// shader resource views.
-		oit_read();
-		// Switches to the composite to begin the sorting process.
-		context->PSSetShader(composite_ps.shader.Get(), nullptr, 0);
-		context->VSSetShader(composite_vs.shader.Get(), nullptr, 0);
-
-		// Unbind the last vertex & index buffers (one of the cubes)...
-		context->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
-		context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
-		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-		// ...then draw 3 points. The composite shader uses SV_VertexID
-		// to generate a full screen triangle, so we don't need a buffer!
-		context->Draw(3, 0);
-
-		blend_flags = blend_;
-		update_blend();
-	}
-
-	if (!oit_enabled && oit_enabled_ != oit_enabled)
-	{
-		oit_enabled_ = oit_enabled;
-		oit_write();
-	}
-
-	oit_enabled_ = oit_enabled;
-
-	if (oit_enabled_)
-	{
-		// Restore R/W access to the UAV buffers from the shader.
-		oit_write();
-	}
+	oit_start();
 
 	auto interval = present_params.FullScreen_PresentationInterval;
 
@@ -2348,7 +2358,7 @@ HRESULT STDMETHODCALLTYPE Direct3DDevice8::DrawPrimitive(D3DPRIMITIVETYPE Primit
 
 	auto& alpha = render_state_values[D3DRS_ALPHABLENDENABLE];
 
-	if (alpha.data() == TRUE && oit_enabled_)
+	if (alpha.data() == TRUE && (oit_actually_enabled && oit_enabled))
 	{
 		DWORD ZWRITEENABLE;
 		DWORD ZENABLE;
@@ -3244,7 +3254,7 @@ void Direct3DDevice8::update_shaders()
 
 	alpha.clear();
 
-	if (oit_enabled_ && shader_flags & ShaderFlags::rs_alpha)
+	if ((oit_actually_enabled && oit_enabled) && shader_flags & ShaderFlags::rs_alpha)
 	{
 		shader_flags |= ShaderFlags::oit;
 	}
@@ -3417,7 +3427,7 @@ void Direct3DDevice8::oit_write()
 	static const uint zero[3] = { 0, 0, 0 };
 
 	// Binds our fragment list & list head UAVs for read/write operations.
-	context->OMSetRenderTargetsAndUnorderedAccessViews(1, oit_enabled_ ? composite_view.GetAddressOf() : render_target.GetAddressOf(),
+	context->OMSetRenderTargetsAndUnorderedAccessViews(1, oit_actually_enabled ? composite_view.GetAddressOf() : render_target.GetAddressOf(),
 	                                                   depth_view.Get(), 1, uavs.size(), &uavs[0], &zero[0]);
 
 	// Resets the list head indices to FRAGMENT_LIST_NULL.

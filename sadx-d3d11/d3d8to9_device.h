@@ -142,6 +142,8 @@ public:
 	virtual BOOL STDMETHODCALLTYPE ShowCursor(BOOL bShow);
 	virtual HRESULT STDMETHODCALLTYPE CreateAdditionalSwapChain(D3DPRESENT_PARAMETERS8* pPresentationParameters, Direct3DSwapChain8** ppSwapChain);
 	virtual HRESULT STDMETHODCALLTYPE Reset(D3DPRESENT_PARAMETERS8* pPresentationParameters);
+	void oit_composite();
+	void oit_start();
 	virtual HRESULT STDMETHODCALLTYPE Present(const RECT* pSourceRect, const RECT* pDestRect, HWND hDestWindowOverride, const RGNDATA* pDirtyRegion);
 	virtual HRESULT STDMETHODCALLTYPE GetBackBuffer(UINT iBackBuffer, D3DBACKBUFFER_TYPE Type, Direct3DSurface8** ppBackBuffer);
 	virtual HRESULT STDMETHODCALLTYPE GetRasterStatus(D3DRASTER_STATUS* pRasterStatus);
@@ -272,7 +274,7 @@ public:
 	bool oit_enabled = true;
 
 protected:
-	bool oit_enabled_ = true;
+	bool oit_actually_enabled = true;
 	Direct3D8* const d3d;
 
 	VertexShader composite_vs;

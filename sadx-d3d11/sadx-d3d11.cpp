@@ -73,6 +73,36 @@ extern "C"
 		WriteJump(reinterpret_cast<void*>(0x007C235E), Direct3DCreate8);
 	}
 
+	EXPORT bool oit_enabled()
+	{
+		return Direct3D_Device && Direct3D_Device->oit_enabled;
+	}
+
+	EXPORT void oit_enable()
+	{
+		if (Direct3D_Device)
+		{
+			Direct3D_Device->oit_enabled = true;
+		}
+	}
+
+	EXPORT void oit_disable()
+	{
+		if (Direct3D_Device)
+		{
+			Direct3D_Device->oit_enabled = false;
+		}
+	}
+
+	EXPORT void __cdecl OnRenderSceneEnd()
+	{
+		Direct3D_Device->oit_composite();
+	}
+
+	EXPORT void __cdecl OnRenderSceneStart()
+	{
+	}
+
 	EXPORT void __cdecl OnFrame()
 	{
 		if (ControllerPointers[0])
